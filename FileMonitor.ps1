@@ -23,25 +23,27 @@ function Scan-Folder {
         [string]$Folder
     )
 
-    # Get all files from the folder and all subfolders
-    $Files = Get-ChildItem `
-        -Path $Folder `
-        -File `
-        -Recurse `
-        -ErrorAction SilentlyContinue
+    # Get only the immediate subfolders
+    $SubFolders = Get-ChildItem -Path $Folder -Directory -ErrorAction SilentlyContinue
 
-    foreach ($File in $Files) {
+    foreach ($SubFolder in $SubFolders) {
 
-        $DetectionDate = Get-Date -Format "dd-MMM-yyyy"
-        $DetectionTime = Get-Date -Format "HH:mm:ss"
-        $LastModified  = $File.LastWriteTime.ToString("dd-MMM-yyyy HH:mm:ss")
+        # Get files directly inside this subfolder
+        $Files = Get-ChildItem -Path $SubFolder.FullName -File -ErrorAction SilentlyContinue
 
-        [PSCustomObject]@{
-            DetectionDate = $DetectionDate
-            DetectionTime = $DetectionTime
-            Filename      = $File.Name
-            LastModified  = $LastModified
-            Path          = $File.DirectoryName
+        foreach ($File in $Files) {
+
+            $DetectionDate = Get-Date -Format "dd-MMM-yyyy"
+            $DetectionTime = Get-Date -Format "HH:mm:ss"
+            $LastModified  = $File.LastWriteTime.ToString("dd-MMM-yyyy HH:mm:ss")
+
+            [PSCustomObject]@{
+                DetectionDate = $DetectionDate
+                DetectionTime = $DetectionTime
+                Filename      = $File.Name
+                LastModified  = $LastModified
+                Path          = $File.DirectoryName
+            }
         }
     }
 }
