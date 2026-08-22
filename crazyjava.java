@@ -8,9 +8,17 @@ public class DBConnectTest {
 
     public static void main(String[] args) {
 
+        // Check that the properties file path was provided
+        if (args.length != 1) {
+            System.err.println("Usage: java DBConnectTest <path-to-db.properties>");
+            System.exit(1);
+        }
+
+        String configPath = args[0];
+
         Properties prop = new Properties();
 
-        try (InputStream input = new FileInputStream("db.properties")) {
+        try (InputStream input = new FileInputStream(configPath)) {
 
             // Read db.properties
             prop.load(input);
@@ -21,7 +29,7 @@ public class DBConnectTest {
             String username = prop.getProperty("db.username");
             String password = prop.getProperty("db.password");
 
-            // Build JDBC URL
+            // Build JDBC connection URL
             String connectionUrl =
                     "jdbc:sqlserver://" + server + ":" + port +
                     ";databaseName=" + database +
@@ -33,7 +41,7 @@ public class DBConnectTest {
 
             System.out.println("Attempting database connection...");
 
-            // Connect
+            // Establish database connection
             try (Connection connection =
                          DriverManager.getConnection(connectionUrl)) {
 
@@ -45,6 +53,7 @@ public class DBConnectTest {
 
             System.err.println("Database connection failed.");
             e.printStackTrace();
+            System.exit(1);
         }
     }
 }
