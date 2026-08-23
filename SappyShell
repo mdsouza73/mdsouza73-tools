@@ -1,0 +1,66 @@
+#!/bin/bash
+
+
+# CONFIGURATION
+ARCHIVE_PATH="/your/archive/path"
+
+
+
+
+# VARIABLES
+SOURCE_FILE=""
+SOURCE_FILENAME=""
+SOURCE_DATE=""
+COUNTRY_COUNT=0
+
+
+
+# FIND LATEST SAP FILE
+find_latest_file() {
+
+    SOURCE_FILE=$(find "$ARCHIVE_PATH" \
+        -maxdepth 1 \
+        -type f \
+        -name "CBFAP_R_*.zip" \
+        -printf "%T@ %p\n" 2>/dev/null |
+        sort -nr |
+        head -1 |
+        cut -d' ' -f2-)
+
+    if [ -z "$SOURCE_FILE" ]; then
+        echo "[ERROR] No SAP source file found in $ARCHIVE_PATH"
+        exit 1
+    fi
+
+    SOURCE_FILENAME=$(basename "$SOURCE_FILE")
+
+    echo "[INFO] Latest SAP file: $SOURCE_FILENAME"
+}
+
+
+# EXTRACT COUNTRIES Count
+count_countries() {
+
+    COUNTRY_COUNT=$(unzip -p "$SOURCE_FILE" 2>/dev/null |
+        tail -n +2 |
+        cut -c1-2 |
+        sort -u |
+        wc -l)
+
+    if [ "$COUNTRY_COUNT" -eq 0 ]; then
+        echo "[ERROR] No countries found in source file."
+        exit 1
+    fi
+
+    echo "[INFO] Distinct countries found: $COUNTRY_COUNT"
+}
+
+
+
+# MAIN
+echo "[INFO] Starting SAP processing..."
+find_latest_file
+echo $SOURCE_FILE
+count_countries
+echo $COUNTRY_COUNT
+echo "[INFO] SAP source validation completed."
