@@ -1,105 +1,17 @@
-# ============================================================
-# APM File Monitor
-# ============================================================
+1. Justification for Critical Priority
 
-# ------------------------------------------------------------
-# Configuration
-# ------------------------------------------------------------
+LexisNexis has updated the FTP endpoint used by Compliance Link 5.0 for downloading watchlist updates to fdps.lexisnexis.com. The existing FTP endpoint is scheduled for decommissioning. Firewall access is therefore required to ensure that Compliance Link can continue downloading the latest watchlist updates. If connectivity is not established before the existing endpoint is decommissioned, watchlist updates may not be downloaded, resulting in Compliance Link screening against outdated watchlist data.
 
-$MonitorFolders = @(
-    "D:\APM\Staging",
-    "D:\APM\AnotherFolder"
-)
+This clearly explains why it is time-sensitive without mentioning the internal upgrade/change history.
 
-$OutputFile = "D:\APM\FileMonitor.txt"
+2. Is this an Emergency Change?
 
+No. This request is not related to an Emergency Change.
 
-# ------------------------------------------------------------
-# Function: Scan a folder and return file details
-# ------------------------------------------------------------
+Simple and direct.
 
-function Scan-Folder {
-    param (
-        [string]$Folder
-    )
+3. Business Impact to Corebridge
 
-    # Get only the immediate subfolders
-    $SubFolders = Get-ChildItem -Path $Folder -Directory -ErrorAction SilentlyContinue
+I'd make this stronger than your current answer:
 
-    foreach ($SubFolder in $SubFolders) {
-
-        # Get files directly inside this subfolder
-        $Files = Get-ChildItem -Path $SubFolder.FullName -File -ErrorAction SilentlyContinue
-
-        foreach ($File in $Files) {
-
-            $DetectionDate = Get-Date -Format "dd-MMM-yyyy"
-            $DetectionTime = Get-Date -Format "HH:mm:ss"
-            $LastModified  = $File.LastWriteTime.ToString("dd-MMM-yyyy HH:mm:ss")
-
-            [PSCustomObject]@{
-                DetectionDate = $DetectionDate
-                DetectionTime = $DetectionTime
-                Filename      = $File.Name
-                LastModified  = $LastModified
-                Path          = $File.DirectoryName
-            }
-        }
-    }
-}
-
-
-# ------------------------------------------------------------
-# Read existing output file
-# ------------------------------------------------------------
-
-$ExistingEntries = @()
-
-if (Test-Path $OutputFile) {
-    $ExistingEntries = Get-Content -Path $OutputFile
-}
-
-
-# ------------------------------------------------------------
-# Scan each monitoring folder
-# ------------------------------------------------------------
-
-foreach ($MonitorFolder in $MonitorFolders) {
-
-    # Make sure the folder exists
-    if (-not (Test-Path $MonitorFolder)) {
-        continue
-    }
-
-    # Scan the folder
-    $FileDetails = Scan-Folder -Folder $MonitorFolder
-
-
-    # --------------------------------------------------------
-    # Process each file
-    # --------------------------------------------------------
-
-    foreach ($File in $FileDetails) {
-
-        # Unique combination used to identify the file/version
-        $UniqueEntry = "$($File.Filename) | $($File.LastModified) | $($File.Path)"
-
-        # Check if this entry already exists
-        $AlreadyExists = $ExistingEntries | Where-Object {
-            $_ -like "*$UniqueEntry"
-        }
-
-        # If it is a new entry, write it to the output
-        if (-not $AlreadyExists) {
-
-            $OutputLine = "$($File.DetectionDate) | $($File.DetectionTime) | $($File.Filename) | $($File.LastModified) | $($File.Path)"
-
-            Add-Content -Path $OutputFile -Value $OutputLine
-
-            # Add it to our in-memory list as well
-            # so duplicate files found during this same run
-            # are not written twice.
-            $ExistingEntries += $OutputLine
-        }
-    }
-}
+If the firewall request is not approved and implemented in time, Compliance Link 5.0 may be unable to download the latest watchlist updates from LexisNexis. This could result in screening being performed against outdated watchlist data, potentially causing newly added or updated watchlist entries to be unavailable for screening. This presents a compliance and operational risk to Corebridge.
