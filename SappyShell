@@ -1,26 +1,75 @@
-function ingestCSVFiles
+function validateWorkFiles
 {
-    log "Starting CSV file ingestion from ${SOURCE_DIR}"
+    log "Starting validation of files in ${WORK_DIR}"
 
-    find "${SOURCE_DIR}" -type f -name "*.csv" | while IFS= read -r CSV_FILE
+    for INPUT_FILE in "${WORK_DIR}"/*.csv
     do
-        log "Found CSV file: ${CSV_FILE}"
 
-        FILE_NAME=$(basename "${CSV_FILE}")
+        [ -f "${INPUT_FILE}" ] || continue
 
-        cp "${CSV_FILE}" "${WORK_DIR}/${FILE_NAME}" >> "${LOG_FILE}" 2>&1
-        CP_RC=$?
+        FILE_NAME=$(basename "${INPUT_FILE}")
 
-        if [ ${CP_RC} -eq 0 ]; then
-            log "Successfully copied CSV file: ${CSV_FILE}"
-        else
-            log "ERROR: Failed to copy CSV file: ${CSV_FILE}"
-            log "ERROR: Copy return code: ${CP_RC}"
+        log "Validating file: ${FILE_NAME}"
+
+        # ----------------------------------------------------
+        # Read RecordCount
+        # ----------------------------------------------------
+
+        FIRST_LINE=$(head -1 "${INPUT_FILE}")
+
+        case "${FIRST_LINE}" in
+            RecordCount:*)
+                EXPECTED_COUNT=${FIRST_LINE#RecordCount:}
+                ;;
+            *)
+                log "ERROR: ${FILE_NAME} - RecordCount header not found"
+                return 1
+                ;;
+        esac
+
+        log "Expected RecordCount: ${EXPECTED_COUNT}"
+
+        # ----------------------------------------------------
+        # Count actual records
+        # ----------------------------------------------------
+
+        ACTUAL_COUNT=$(tail -n +2 "${INPUT_FILE}" | wc -l | awk '{print $1}')
+
+        log "Actual RecordCount: ${ACTUAL_COUNT}"
+
+        if [ "${EXPECTED_COUNT}" -ne "${ACTUAL_COUNT}" ]; then
+            log "ERROR: ${FILE_NAME} - RecordCount mismatch"
+            log "ERROR: Expected=${EXPECTED_COUNT}, Actual=${ACTUAL_COUNT}"
             return 1
         fi
+
+        log "RecordCount validation successful"
+
+        # ----------------------------------------------------
+        # Validate column count
+        # ----------------------------------------------------
+
+        LINE_NUMBER=1
+
+        while IFS= read -r RECORD
+        do
+            LINE_NUMBER=$((LINE_NUMBER + 1))
+
+            COLUMN_COUNT=$(echo "${RECORD}" | awk -F'|' '{print NF}')
+
+            if [ "${COLUMN_COUNT}" -ne 39 ]; then
+                log "ERROR: ${FILE_NAME} - Line ${LINE_NUMBER} has ${COLUMN_COUNT} columns. Expected 39."
+                return 1
+            fi
+
+        done < <(tail -n +2 "${INPUT_FILE}")
+
+        log "39-column validation successful"
+        log "File validation successful: ${FILE_NAME}"
+
     done
 
-    log "CSV file ingestion completed"
+    log "All work files passed validation"
 
     return 0
 }
