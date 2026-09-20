@@ -1,4 +1,91 @@
-if [ "$(ls -A "${WORK_DIR}" 2>/dev/null)" ]; then
-    log "ERROR: Work directory is not empty: ${WORK_DIR}"
-    return 1
+function validateWorkFile
+{
+    WORK_FILE=$(find "${WORK_DIR}" -mindepth 1 -maxdepth 1 -type f | head -1)
+
+    if [ -z "${WORK_FILE}" ]; then
+        log "ERROR: No file found in work directory: ${WORK_DIR}"
+        return 1
+    fi
+
+    log "Starting validation for: ${WORK_FILE}"
+
+    # --------------------------------------------------------
+    # Validate RecordCount header
+    # --------------------------------------------------------
+
+    FIRST_LINE=$(head -1 "${WORK_FILE}")
+
+    case "${FIRST_LINE}" in
+        RecordCount:*)
+            EXPECTED_COUNT=${FIRST_LINE#RecordCount:}
+            ;;
+        *)
+            log "ERROR: First line does not contain RecordCount"
+            return 1
+            ;;
+    esac
+
+    # Make sure RecordCount is numeric
+    case "${EXPECTED_COUNT}" in
+        ''|*[!0-9]*)
+            log "ERROR: Invalid RecordCount: ${EXPECTED_COUNT}"
+            return 1
+            ;;
+    esac
+
+    log "Expected RecordCount: ${EXPECTED_COUNT}"
+
+    # --------------------------------------------------------
+    # Count actual records
+    # --------------------------------------------------------
+
+    ACTUAL_COUNT=$(tail -n +2 "${WORK_FILE}" | wc -l | awk '{print $1}')
+
+    log "Actual RecordCount: ${ACTUAL_COUNT}"
+
+    if [ "${EXPECTED_COUNT}" -ne "${ACTUAL_COUNT}" ]; then
+        log "ERROR: RecordCount mismatch"
+        log "ERROR: Expected=${EXPECTED_COUNT}, Actual=${ACTUAL_COUNT}"
+        return 1
+    fi
+
+    log "RecordCount validation successful"
+
+    # --------------------------------------------------------
+    # Validate 39 columns
+    # --------------------------------------------------------
+
+    COLUMN_ERROR=$(tail -n +2 "${WORK_FILE}" | awk -F'|' '
+    {
+        if (NF != 39)
+        {
+            printf "Line %d contains %d columns. Expected 39.\n", NR + 1, NF
+            exit 1
+        }
+    }')
+
+    COLUMN_RC=$?
+
+    if [ ${COLUMN_RC} -ne 0 ]; then
+        log "ERROR: 39-column validation failed"
+        log "ERROR: ${COLUMN_ERROR}"
+        return 1
+    fi
+
+    log "39-column validation successful"
+    log "File validation successful: ${WORK_FILE}"
+
+    return 0
+}
+
+validateWorkFile
+
+VALIDATION_RC=$?
+
+if [ ${VALIDATION_RC} -ne 0 ]; then
+    log "ERROR: File validation failed"
+    exit 1
 fi
+
+log "File validation completed successfully"
+
