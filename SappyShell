@@ -1,4 +1,4 @@
-function validateWorkFile
+function regionSplitting
 {
     WORK_FILE=$(find "${WORK_DIR}" -mindepth 1 -maxdepth 1 -type f | head -1)
 
@@ -7,85 +7,111 @@ function validateWorkFile
         return 1
     fi
 
-    log "Starting validation for: ${WORK_FILE}"
+    FILE_NAME=$(basename "${WORK_FILE}")
 
-    # --------------------------------------------------------
-    # Validate RecordCount header
-    # --------------------------------------------------------
+    log "Starting Region Splitting for: ${FILE_NAME}"
 
-    FIRST_LINE=$(head -1 "${WORK_FILE}")
+    NA_DIR="${SPLIT_DIR}/1"
+    ROW_DIR="${SPLIT_DIR}/2"
+    PEP_DIR="${SPLIT_DIR}/3"
 
-    case "${FIRST_LINE}" in
-        RecordCount:*)
-            EXPECTED_COUNT=${FIRST_LINE#RecordCount:}
+    mkdir -p "${NA_DIR}"
+    mkdir -p "${ROW_DIR}"
+    mkdir -p "${PEP_DIR}"
+
+    NA_FILE="${NA_DIR}/${FILE_NAME}"
+    ROW_FILE="${ROW_DIR}/${FILE_NAME}"
+    PEP_FILE="${PEP_DIR}/${FILE_NAME}"
+
+    # ------------------------------------------------------------
+    # PEP File
+    # PEP is identified only by the filename.
+    # Ignore the RecordCount header and send all data to folder 3.
+    # ------------------------------------------------------------
+
+    case "${FILE_NAME}" in
+
+        *PEP*)
+            log "PEP file identified: ${FILE_NAME}"
+            log "Sending all data records to Region 3"
+
+            tail -n +2 "${WORK_FILE}" > "${PEP_FILE}"
+
+            if [ $? -ne 0 ]; then
+                log "ERROR: Failed to create PEP split file: ${PEP_FILE}"
+                return 1
+            fi
+
+            log "PEP Region Splitting successful: ${PEP_FILE}"
             ;;
+
         *)
-            log "ERROR: First line does not contain RecordCount"
-            return 1
+            # ----------------------------------------------------
+            # Non-PEP File
+            # US / CA / BM -> NA -> folder 1
+            # Everything else -> ROW -> folder 2
+            # ----------------------------------------------------
+
+            log "Non-PEP file identified: ${FILE_NAME}"
+            log "Performing NA / ROW region splitting"
+
+            awk -F'|' '
+            NR == 1 {
+                next
+            }
+
+            {
+                country = substr($1, 1, 2)
+
+                if (country == "US" ||
+                    country == "CA" ||
+                    country == "BM")
+                {
+                    print > na_file
+                }
+                else
+                {
+                    print > row_file
+                }
+            }
+            ' na_file="${NA_FILE}" row_file="${ROW_FILE}" "${WORK_FILE}"
+
+            AWK_RC=$?
+
+            if [ ${AWK_RC} -ne 0 ]; then
+                log "ERROR: Region splitting failed for: ${FILE_NAME}"
+                log "ERROR: AWK return code: ${AWK_RC}"
+                return 1
+            fi
+
+            # Remove empty output files
+            if [ -f "${NA_FILE}" ] && [ ! -s "${NA_FILE}" ]; then
+                rm -f "${NA_FILE}"
+            fi
+
+            if [ -f "${ROW_FILE}" ] && [ ! -s "${ROW_FILE}" ]; then
+                rm -f "${ROW_FILE}"
+            fi
+
+            if [ -f "${NA_FILE}" ]; then
+                NA_COUNT=$(wc -l < "${NA_FILE}" | awk '{print $1}')
+                log "NA Region (1): ${NA_COUNT} records"
+            else
+                log "NA Region (1): No records"
+            fi
+
+            if [ -f "${ROW_FILE}" ]; then
+                ROW_COUNT=$(wc -l < "${ROW_FILE}" | awk '{print $1}')
+                log "ROW Region (2): ${ROW_COUNT} records"
+            else
+                log "ROW Region (2): No records"
+            fi
+
+            log "NA / ROW Region Splitting successful: ${FILE_NAME}"
             ;;
     esac
 
-    # Make sure RecordCount is numeric
-    case "${EXPECTED_COUNT}" in
-        ''|*[!0-9]*)
-            log "ERROR: Invalid RecordCount: ${EXPECTED_COUNT}"
-            return 1
-            ;;
-    esac
-
-    log "Expected RecordCount: ${EXPECTED_COUNT}"
-
-    # --------------------------------------------------------
-    # Count actual records
-    # --------------------------------------------------------
-
-    ACTUAL_COUNT=$(tail -n +2 "${WORK_FILE}" | wc -l | awk '{print $1}')
-
-    log "Actual RecordCount: ${ACTUAL_COUNT}"
-
-    if [ "${EXPECTED_COUNT}" -ne "${ACTUAL_COUNT}" ]; then
-        log "ERROR: RecordCount mismatch"
-        log "ERROR: Expected=${EXPECTED_COUNT}, Actual=${ACTUAL_COUNT}"
-        return 1
-    fi
-
-    log "RecordCount validation successful"
-
-    # --------------------------------------------------------
-    # Validate 39 columns
-    # --------------------------------------------------------
-
-    COLUMN_ERROR=$(tail -n +2 "${WORK_FILE}" | awk -F'|' '
-    {
-        if (NF != 39)
-        {
-            printf "Line %d contains %d columns. Expected 39.\n", NR + 1, NF
-            exit 1
-        }
-    }')
-
-    COLUMN_RC=$?
-
-    if [ ${COLUMN_RC} -ne 0 ]; then
-        log "ERROR: 39-column validation failed"
-        log "ERROR: ${COLUMN_ERROR}"
-        return 1
-    fi
-
-    log "39-column validation successful"
-    log "File validation successful: ${WORK_FILE}"
+    log "Region Splitting completed successfully: ${FILE_NAME}"
 
     return 0
 }
-
-validateWorkFile
-
-VALIDATION_RC=$?
-
-if [ ${VALIDATION_RC} -ne 0 ]; then
-    log "ERROR: File validation failed"
-    exit 1
-fi
-
-log "File validation completed successfully"
-
