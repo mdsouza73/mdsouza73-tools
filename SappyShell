@@ -1,66 +1,50 @@
-#!/bin/bash
+#!/bin/ksh
 
+# ------------------------------------------------------------
+# Compliance Link 5.0 File Preprocessor
+# ------------------------------------------------------------
 
-# CONFIGURATION
-ARCHIVE_PATH="/your/archive/path"
+BASE_DIR="/home/cb7510764/ComplianceLink_5.0/scripts/ComplianceLink_5.0"
 
+SOURCE_DIR="/mft/source/sftpcrsp"
+WORK_DIR="${BASE_DIR}/work_dir"
+SPLIT_DIR="${BASE_DIR}/splitting"
+LOG_DIR="${BASE_DIR}/logs"
 
+# ------------------------------------------------------------
+# Create directories
+# ------------------------------------------------------------
 
+mkdir -p "${WORK_DIR}"
+mkdir -p "${SPLIT_DIR}"
+mkdir -p "${LOG_DIR}"
 
-# VARIABLES
-SOURCE_FILE=""
-SOURCE_FILENAME=""
-SOURCE_DATE=""
-COUNTRY_COUNT=0
+# ------------------------------------------------------------
+# Create today's log file
+# Format:
+# ComplianceLink_PreProcessor_yyyymmdd.log
+# ------------------------------------------------------------
 
+LOG_DATE=$(date '+%Y%m%d')
+LOG_FILE="${LOG_DIR}/ComplianceLink_PreProcessor_${LOG_DATE}.log"
 
+# ------------------------------------------------------------
+# Logging function
+# Format:
+# hh:mm:ss - Log message
+# ------------------------------------------------------------
 
-# FIND LATEST SAP FILE
-find_latest_file() {
-
-    SOURCE_FILE=$(find "$ARCHIVE_PATH" \
-        -maxdepth 1 \
-        -type f \
-        -name "CBFAP_R_*.zip" \
-        -printf "%T@ %p\n" 2>/dev/null |
-        sort -nr |
-        head -1 |
-        cut -d' ' -f2-)
-
-    if [ -z "$SOURCE_FILE" ]; then
-        echo "[ERROR] No SAP source file found in $ARCHIVE_PATH"
-        exit 1
-    fi
-
-    SOURCE_FILENAME=$(basename "$SOURCE_FILE")
-
-    echo "[INFO] Latest SAP file: $SOURCE_FILENAME"
+function log
+{
+    echo "$(date '+%H:%M:%S') - $1" >> "${LOG_FILE}"
 }
 
+# ------------------------------------------------------------
+# Start
+# ------------------------------------------------------------
 
-# EXTRACT COUNTRIES Count
-count_countries() {
-
-    COUNTRY_COUNT=$(unzip -p "$SOURCE_FILE" 2>/dev/null |
-        tail -n +2 |
-        cut -c1-2 |
-        sort -u |
-        wc -l)
-
-    if [ "$COUNTRY_COUNT" -eq 0 ]; then
-        echo "[ERROR] No countries found in source file."
-        exit 1
-    fi
-
-    echo "[INFO] Distinct countries found: $COUNTRY_COUNT"
-}
-
-
-
-# MAIN
-echo "[INFO] Starting SAP processing..."
-find_latest_file
-echo $SOURCE_FILE
-count_countries
-echo $COUNTRY_COUNT
-echo "[INFO] SAP source validation completed."
+log "Starting Compliance Link 5.0 PreProcessor"
+log "Source Directory: ${SOURCE_DIR}"
+log "Working Directory: ${WORK_DIR}"
+log "Splitting Directory: ${SPLIT_DIR}"
+log "Log File: ${LOG_FILE}"
