@@ -1,50 +1,35 @@
-#!/bin/ksh
-
-# ------------------------------------------------------------
-# Compliance Link 5.0 File Preprocessor
-# ------------------------------------------------------------
-
-BASE_DIR="/home/cb7510764/ComplianceLink_5.0/scripts/ComplianceLink_5.0"
-
-SOURCE_DIR="/mft/source/sftpcrsp"
-WORK_DIR="${BASE_DIR}/work_dir"
-SPLIT_DIR="${BASE_DIR}/splitting"
-LOG_DIR="${BASE_DIR}/logs"
-
-# ------------------------------------------------------------
-# Create directories
-# ------------------------------------------------------------
-
-mkdir -p "${WORK_DIR}"
-mkdir -p "${SPLIT_DIR}"
-mkdir -p "${LOG_DIR}"
-
-# ------------------------------------------------------------
-# Create today's log file
-# Format:
-# ComplianceLink_PreProcessor_yyyymmdd.log
-# ------------------------------------------------------------
-
-LOG_DATE=$(date '+%Y%m%d')
-LOG_FILE="${LOG_DIR}/ComplianceLink_PreProcessor_${LOG_DATE}.log"
-
-# ------------------------------------------------------------
-# Logging function
-# Format:
-# hh:mm:ss - Log message
-# ------------------------------------------------------------
-
-function log
+function ingestFiles
 {
-    echo "$(date '+%H:%M:%S') - $1" >> "${LOG_FILE}"
+    SOURCE_DIR="/mft/NASH5"
+    WORK_DIR="${BASE_DIR}/work_dir"
+
+    log "Starting file ingestion from ${SOURCE_DIR}"
+
+    find "${SOURCE_DIR}" -type f -name "*.zip" | while IFS= read -r ZIP_FILE
+    do
+        log "Found ZIP file: ${ZIP_FILE}"
+
+        unzip -o "${ZIP_FILE}" -d "${WORK_DIR}" >> "${LOG_FILE}" 2>&1
+        UNZIP_RC=$?
+
+        if [ ${UNZIP_RC} -eq 0 ]; then
+            log "Successfully unzipped: ${ZIP_FILE}"
+
+            rm -f "${ZIP_FILE}"
+            DELETE_RC=$?
+
+            if [ ${DELETE_RC} -eq 0 ]; then
+                log "Successfully deleted source file: ${ZIP_FILE}"
+            else
+                log "ERROR: File was unzipped successfully but could not be deleted: ${ZIP_FILE}"
+            fi
+        else
+            log "ERROR: Failed to unzip: ${ZIP_FILE}"
+            log "ERROR: Unzip return code: ${UNZIP_RC}"
+            log "Source file will NOT be deleted: ${ZIP_FILE}"
+        fi
+
+    done
+
+    log "File ingestion completed"
 }
-
-# ------------------------------------------------------------
-# Start
-# ------------------------------------------------------------
-
-log "Starting Compliance Link 5.0 PreProcessor"
-log "Source Directory: ${SOURCE_DIR}"
-log "Working Directory: ${WORK_DIR}"
-log "Splitting Directory: ${SPLIT_DIR}"
-log "Log File: ${LOG_FILE}"
