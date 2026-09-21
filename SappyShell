@@ -9,7 +9,7 @@ function regionSplitting
 
     FILE_NAME=$(basename "${WORK_FILE}")
 
-    log "Starting Region Splitting for: ${FILE_NAME}"
+    log "Starting Region Splitting: ${FILE_NAME}"
 
     NA_DIR="${SPLIT_DIR}/1"
     ROW_DIR="${SPLIT_DIR}/2"
@@ -19,43 +19,51 @@ function regionSplitting
     mkdir -p "${ROW_DIR}"
     mkdir -p "${PEP_DIR}"
 
-    NA_FILE="${NA_DIR}/${FILE_NAME}"
-    ROW_FILE="${ROW_DIR}/${FILE_NAME}"
-    PEP_FILE="${PEP_DIR}/${FILE_NAME}"
-
     # ------------------------------------------------------------
-    # PEP File
+    # PEP FILE
     # PEP is identified only by the filename.
-    # Ignore the RecordCount header and send all data to folder 3.
+    # Ignore the RecordCount header.
+    # All data records go to Region 3.
     # ------------------------------------------------------------
 
-    case "${FILE_NAME}" in
+    if [[ "${FILE_NAME}" == *PEP* ]]; then
 
-        *PEP*)
-            log "PEP file identified: ${FILE_NAME}"
-            log "Sending all data records to Region 3"
+        PEP_FILE="${PEP_DIR}/PEP_${FILE_NAME}"
 
-            tail -n +2 "${WORK_FILE}" > "${PEP_FILE}"
+        log "PEP file identified: ${FILE_NAME}"
+        log "Creating PEP file: ${PEP_FILE}"
 
-            if [ $? -ne 0 ]; then
-                log "ERROR: Failed to create PEP split file: ${PEP_FILE}"
-                return 1
-            fi
+        tail -n +2 "${WORK_FILE}" > "${PEP_FILE}"
 
-            log "PEP Region Splitting successful: ${PEP_FILE}"
-            ;;
+        if [ $? -ne 0 ]; then
+            log "ERROR: Failed to create PEP file: ${PEP_FILE}"
+            return 1
+        fi
 
-        *)
-            # ----------------------------------------------------
-            # Non-PEP File
-            # US / CA / BM -> NA -> folder 1
-            # Everything else -> ROW -> folder 2
-            # ----------------------------------------------------
+        log "PEP splitting completed successfully"
 
-            log "Non-PEP file identified: ${FILE_NAME}"
-            log "Performing NA / ROW region splitting"
+    else
 
-            awk -F'|' '
+        # --------------------------------------------------------
+        # NON-PEP FILE
+        #
+        # Ignore RecordCount header.
+        #
+        # First two characters of Column 1 determine the output
+        # filename.
+        #
+        # US / CA / BM -> Region 1 (NA)
+        # Everything else -> Region 2 (ROW)
+        # --------------------------------------------------------
+
+        log "Non-PEP file identified: ${FILE_NAME}"
+        log "Starting country/region splitting"
+
+        awk -F'|' \
+            -v na_dir="${NA_DIR}" \
+            -v row_dir="${ROW_DIR}" \
+            -v file_name="${FILE_NAME}" '
+
             NR == 1 {
                 next
             }
@@ -67,49 +75,29 @@ function regionSplitting
                     country == "CA" ||
                     country == "BM")
                 {
-                    print > na_file
+                    output_file = na_dir "/" country "_" file_name
                 }
                 else
                 {
-                    print > row_file
+                    output_file = row_dir "/" country "_" file_name
                 }
+
+                print > output_file
             }
-            ' na_file="${NA_FILE}" row_file="${ROW_FILE}" "${WORK_FILE}"
 
-            AWK_RC=$?
+        ' "${WORK_FILE}"
 
-            if [ ${AWK_RC} -ne 0 ]; then
-                log "ERROR: Region splitting failed for: ${FILE_NAME}"
-                log "ERROR: AWK return code: ${AWK_RC}"
-                return 1
-            fi
+        AWK_RC=$?
 
-            # Remove empty output files
-            if [ -f "${NA_FILE}" ] && [ ! -s "${NA_FILE}" ]; then
-                rm -f "${NA_FILE}"
-            fi
+        if [ ${AWK_RC} -ne 0 ]; then
+            log "ERROR: Region splitting failed for: ${FILE_NAME}"
+            log "ERROR: AWK return code: ${AWK_RC}"
+            return 1
+        fi
 
-            if [ -f "${ROW_FILE}" ] && [ ! -s "${ROW_FILE}" ]; then
-                rm -f "${ROW_FILE}"
-            fi
+        log "Country/Region splitting completed successfully"
 
-            if [ -f "${NA_FILE}" ]; then
-                NA_COUNT=$(wc -l < "${NA_FILE}" | awk '{print $1}')
-                log "NA Region (1): ${NA_COUNT} records"
-            else
-                log "NA Region (1): No records"
-            fi
-
-            if [ -f "${ROW_FILE}" ]; then
-                ROW_COUNT=$(wc -l < "${ROW_FILE}" | awk '{print $1}')
-                log "ROW Region (2): ${ROW_COUNT} records"
-            else
-                log "ROW Region (2): No records"
-            fi
-
-            log "NA / ROW Region Splitting successful: ${FILE_NAME}"
-            ;;
-    esac
+    fi
 
     log "Region Splitting completed successfully: ${FILE_NAME}"
 
